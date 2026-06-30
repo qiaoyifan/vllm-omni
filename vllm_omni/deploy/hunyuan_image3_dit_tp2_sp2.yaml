@@ -1,0 +1,37 @@
+# HunyuanImage-3.0-Instruct DiT-only deploy -- TP2 x SP2 (Ulysses) variant.
+#
+# Same as hunyuan_image3_dit.yaml but splits the 4-GPU budget into
+# tensor_parallel_size=2 x ulysses_degree=2 so that Ulysses sequence
+# parallelism is actually engaged on the diffusion stage (the default
+# TP4 x SP1 config does NOT exercise the all-to-all path).
+#
+# Use this purely to profile / A-B the SP attention path. Requires 4 GPUs.
+pipeline: hunyuan_image3_dit
+async_chunk: false
+
+stages:
+  - stage_id: 0
+    max_num_seqs: 1
+    gpu_memory_utilization: 0.9
+    enforce_eager: true
+    devices: "0,1,2,3"
+    vae_use_slicing: false
+    vae_use_tiling: false
+    cache_backend:
+    cache_config:
+    enable_cache_dit_summary: false
+    parallel_config:
+      pipeline_parallel_size: 1
+      data_parallel_size: 1
+      tensor_parallel_size: 2
+      enable_expert_parallel: true
+      sequence_parallel_size: 2
+      ulysses_degree: 2
+      ring_degree: 1
+      cfg_parallel_size: 1
+      vae_patch_parallel_size: 1
+      use_hsdp: false
+      hsdp_shard_size: -1
+      hsdp_replicate_size: 1
+    default_sampling_params:
+      seed: 42
