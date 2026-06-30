@@ -311,11 +311,18 @@ class UlyssesParallelAttention:
                         "This typically means the input sequence was not evenly shardable across the ring. "
                         "Try setting ring_degree=1, or choose a sequence length divisible by ring_degree."
                     )
-            query, orig_head_cnt = _ulysses_all_to_all_any_qkv(
-                self._ulysses_pg, query, seq_lens=seq_lens, use_sync=self._use_sync
-            )
-            key, _ = _ulysses_all_to_all_any_qkv(self._ulysses_pg, key, seq_lens=seq_lens, use_sync=self._use_sync)
-            value, _ = _ulysses_all_to_all_any_qkv(self._ulysses_pg, value, seq_lens=seq_lens, use_sync=self._use_sync)
+            with torch.profiler.record_function("sp_q_all_to_all"):
+                query, orig_head_cnt = _ulysses_all_to_all_any_qkv(
+                    self._ulysses_pg, query, seq_lens=seq_lens, use_sync=self._use_sync
+                )
+            with torch.profiler.record_function("sp_k_all_to_all"):
+                key, _ = _ulysses_all_to_all_any_qkv(
+                    self._ulysses_pg, key, seq_lens=seq_lens, use_sync=self._use_sync
+                )
+            with torch.profiler.record_function("sp_v_all_to_all"):
+                value, _ = _ulysses_all_to_all_any_qkv(
+                    self._ulysses_pg, value, seq_lens=seq_lens, use_sync=self._use_sync
+                )
         else:
             # Strict mode: fail fast with actionable errors for head divisibility.
             for name, t in (("query", query), ("key", key), ("value", value)):
@@ -329,9 +336,18 @@ class UlyssesParallelAttention:
                     )
 
             # (bs, seq_len/P, head_cnt, head_size) -> (bs, seq_len, head_cnt/P, head_size)
-            query = SeqAllToAll4D.apply(self._ulysses_pg, query, self._scatter_idx, self._gather_idx, self._use_sync)
-            key = SeqAllToAll4D.apply(self._ulysses_pg, key, self._scatter_idx, self._gather_idx, self._use_sync)
-            value = SeqAllToAll4D.apply(self._ulysses_pg, value, self._scatter_idx, self._gather_idx, self._use_sync)
+            with torch.profiler.record_function("sp_q_all_to_all"):
+                query = SeqAllToAll4D.apply(
+                    self._ulysses_pg, query, self._scatter_idx, self._gather_idx, self._use_sync
+                )
+            with torch.profiler.record_function("sp_k_all_to_all"):
+                key = SeqAllToAll4D.apply(
+                    self._ulysses_pg, key, self._scatter_idx, self._gather_idx, self._use_sync
+                )
+            with torch.profiler.record_function("sp_v_all_to_all"):
+                value = SeqAllToAll4D.apply(
+                    self._ulysses_pg, value, self._scatter_idx, self._gather_idx, self._use_sync
+                )
             seq_lens = []
             local_seq_len = 0
             orig_head_cnt = 0
